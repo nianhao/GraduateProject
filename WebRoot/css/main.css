@@ -1,0 +1,7 @@
+@CHARSET "UTF-8";
+video{
+	transform: rotateY(180deg);
+	background:gray;
+	width:480px;
+	height:360px;
+}
