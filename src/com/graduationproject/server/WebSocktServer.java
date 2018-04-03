@@ -128,7 +128,9 @@ public class WebSocktServer {
 		// TODO Auto-generated method stub
 		String type=textMsg.getType();
 		switch (type) {
-			case "lacnchVideoCall":
+			case "acceptVideoCall":
+			case "rejectVideoCall":
+			case "lanchVideoCall":
 			case "candidate":
 			case "text":
 				TextMsg sendTextMsg=new TextMsg(textMsg,textMsg.getMessage());

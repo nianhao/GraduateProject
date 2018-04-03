@@ -7,3 +7,4 @@ var videoContains={
 		video:true
 		
 };
+var stunServer = {"iceServers" : [{"url" : "stun:stun.l.google.com:19302"}]};

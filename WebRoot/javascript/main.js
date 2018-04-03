@@ -137,6 +137,9 @@ function showOnlineUser(result){
 		startVideoCall(userName);
 	});
 }
+/*
+ * @Msg 通过websocket发送的信息。在Msg.data中有在websocketserver中构造的文字信息。
+ */
 function handleMessage(Msg){
   		var msgStr=Msg.data;
   		var msgJson;
@@ -164,12 +167,24 @@ function handleMessage(Msg){
   				textHis=textHis+'\n'+msgJson.fromUser+getTime()+'\n'+msgInfo;
   				$("#textSendWindows .textSendWindow#"+msgJson.fromUser +" .textAreaHis").val(textHis);
   				break;
-  			case("lacnchVideoCall"):
+  			case("lanchVideoCall"):
   				handleVideoCall(msgJson);
+  				break;
+  			case("acceptVideoCall"):
+  				handleAcceptVideoCall(msgJson);
+  				break;
+  			case("rejectVideoCall"):
+  				handleRejectVideoCall(msgJson);
+  				break;
   			case ("candidate"):
   				break;
   		}
   	}
+function handleAcceptVideoCall(msgJson){
+	var fromUser=msgJson.fromUser;
+	var toUser=msgJson.toUser;
+	Locallog(fromUser+"接受了通话请求，正在连接");
+}
 function handleVideoCall(msgJson){
 	console.log("处理通话请求："+JSON.stringify(msgJson));
 	var fromUser=msgJson.fromUser;
@@ -180,39 +195,97 @@ function handleVideoCall(msgJson){
 		rejectVideoCall(fromUser);
 	}
 }
-function acceptVideoCall(fromUser){
-	
+function acceptVideoCall(userName){
+	Locallog("接受"+userName+"通话邀请，发送接受信息，进入通话连接建立阶段");
+	sendAcceptVideoCallMsg(userName);
+	createRTCPeerConnection(userName);
+	addLocalStream(userName);
+	doConnectionRound(userName);
+}
+function createRTCPeerConnection(userName){
+	var pc = new PeerConnection(stunServer);	
+	pc.onicecandidate = function(event){onIceCandidate(event,userName);};
+	pc.onconnecting = onSessionConnecting;
+	pc.onopen = onSessionOpened;
+	//pc.onaddstream = onRemoteStreamAdded;,修改为新的加载方式
+	pc.ontrack=onRemoteStreamAdded;
+	pc.onremovestream = onRemoteStreamRemoved;
+	//添加到通讯映射里。这里应该放到服务器更安全。但是我实在想不出来可以把js变量放到服务器的方法。
+	//为了安全可以在服务器中也建立一个映射，并生成一个时间码。如果不能匹配则拒绝信息的交换。防止
+	//通话信息泄露
+	RTCPeerConnectionMap.set(userName,pc);
+}
+function addLocalStream(userName){
+	var pc=RTCPeerConnectionMap.get(userName);
+	window.localStream.getTracks().forEach(
+			function(track){
+				pc.addTrack(
+					track,
+					localStream
+				);
+			}
+		);
 }
 function rejectVideoCall(fromUser){
-	
+	Locallog("拒绝"+fromUser+"通话邀请，发送拒绝信息。");
+	sendRejectVideoCallMsg(fromUser);	
+}
+function sendAcceptVideoCallMsg(userName){
+	var message="nothing";
+	var acceptVideoCallCommand="acceptVideoCall";
+	sendTexgMsg("me",userName,acceptVideoCallCommand,message);
+}
+function sendRejectVideoCallMsg(userName){
+	var message="nothing";
+	var rejectVideoCallCommand="rejectVideoCall";
+	sendTexgMsg("me",userName,rejectVideoCallCommand,message);
 }
 var lanchVideoCallid;
 function startSendText(userName){
 	openTextMsgWindow(userName);
 	var data={"type":"startSendText","toUser":userName,};
 }
+
+
+/*视频通话的起点
+ * @userName 向userName发起通话邀请，要求唯一
+ * openVideoCallWindow 添加一个video元素
+ * lanchVideoCall 发起以一个通话请求
+ */
 function startVideoCall(userName){
-	openVideoCallWindow(userName);
-	lanchVideoCall();
+	Locallog("start a videoCall");
+	//打开一个通话窗口，添加一个video元素，准备放置视频流
+	openLocalVideoWindow();
+	//发起通话请求，询问userNames是否接受通话请求
+	lanchVideoCall(userName);
 }
+/*发送一个通话请求
+ * 使用sendTextMsg(fromUser,toUserName,type,message)函数发送命令
+ * @lanchVideoCallcommand="lanchVideoCall"
+ * @userName 向userName发起通话邀请，要求唯一
+ */
 function lanchVideoCall(userName){
-	lanchVideoCallid=setTimeout("lanchVideoCallState(userName)",1000);
+	
+	Locallog("呼叫用户："+userName);
+	//在通话请求被接收之前，每1s执行一次状态函数，表示正在进行通话
+	lanchVideoCallid=setTimeout("lanchVideoCallState("+userName+")",1000);
 	var message="nothing";
-	sendTexgMsg("me",userName,"lacnchVideoCall",message);
+	var lanchVideoCallcommand="lanchVideoCall";
+	//发送文字命令，消息类型为lanchVideoCall
+	sendTexgMsg("me",userName,lanchVideoCallcommand,message);
 	
 }
 function lanchVideoCallState(userName){
 	Locallog("呼叫"+userName);
 }
-function openVideoCallWindow(userName){
-	
+/*如果localVideoOpen=false,说明本地视频没有打开。则打开本地视频流，设置全局变量window.localstream
+ *否则什么都不敢，进入呼叫过程
+ * @userName 建立与userName的通话窗口
+ */
+function openLocalVideoWindow(){	
 	if(localVideoOpen==0){
 		openLocalVideo();
-	}else{
-		addVideoSender(userName);
 	}
-	
-	
 }
 function addVideoSender(userName){
 	
@@ -240,6 +313,7 @@ function start(){
 function setLocalStream(stream){
 	Locallog("创建本地stream成功，"+stream);
 	window.localStream=stream;
+	localVideoOpen+=1;
 	$('div.videoTalk#me div.videoArea video')[0].srcObject=stream;
 }
 function openLocalStreamError(err){
@@ -350,13 +424,13 @@ function sendTexgMsg(fromUserName,toUserName,type,message){
 			"type":"TextMsg",
 			"data":{
 				"type":type,
-				"fromUserName":fromUserName,
-				"toUserName":toUserName,
+				"fromUser":fromUserName,
+				"toUser":toUserName,
 				"time":getTime(),
 				"message":message
 			}
 	};
-	Locallog("发送文字信息到服务器： "+JSON.stringify(data));
+	Locallog("function sendTextMsg 发送文字信息到服务器： "+JSON.stringify(data));
 	$.post("HandleRequest",data,sendTextMsgSuccess);
 }
 
