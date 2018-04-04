@@ -33,3 +33,28 @@ function getTime(){
 	
 	return (new Date().Format("yyyy-MM-dd hh:mm:ss.S"));
 }
+/*将信息发送到服务器，有服务器分发信息；这里TextMsg用于区别file、music之类的信息
+ * data.type:主要是浏览器接收到之后，根据type不同进行不同的行为。我更愿意称之为command
+ * @fromUserName  消息发送者
+ * @toUserName 消息接收者
+ * @type 命令类型（命令名）
+ * @message 具体内容。有的命令需要携带信息。比如offer/answer 需要携带 desc信息
+ */
+function sendTexgMsg(fromUserName,toUserName,type,message){
+	if(typeof(message)!="string"||typeof(message)==="object")
+		message=JSON.stringify(message);
+	var data={
+			"type":"TextMsg",
+			"data":{
+				"type":type,
+				"fromUser":fromUserName,
+				"toUser":toUserName,
+				"time":getTime(),
+				"message":message
+			}
+	};
+	//console.log("**************"+data);
+	//if(type==="offer") alert(data);
+	Locallog("function sendTextMsg 发送文字信息到服务器： "+JSON.stringify(data));
+	$.post("HandleRequest",data,sendTextMsgSuccess);
+}

@@ -37,11 +37,11 @@
 	<textarea rows="3" cols="20">test</textarea>
 	</body>
 	<script type="text/javascript">
-		$(".sendTextBtn").click(function(){
+	/*	$(".sendTextBtn").click(function(){
 			console.log("click me");
 			var userName=$(this).attr('userName');
 	console.log(userName);
-		});
+		});*/
 		
 navigator.mediaDevices.getUserMedia(videoContains).then(setLocalStream).catch(openLocalStreamError);
 function start(){
@@ -55,6 +55,11 @@ function setLocalStream(stream){
 function openLocalStreamError(err){
 	Locallog("创建本地stream失败，"+err);
 }
-	
+	var data={};
+
+	Locallog("function sendTextMsg 发送文字信息到服务器： "+JSON.stringify(data));
+	$.post("HandleRequest",data,sendTextMsgSuccess);
+	function sendTextMsgSuccess(){
+	}
 	</script>
 </html>

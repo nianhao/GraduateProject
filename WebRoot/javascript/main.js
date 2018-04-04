@@ -177,6 +177,13 @@ function handleMessage(Msg){
   				handleRejectVideoCall(msgJson);
   				break;
   			case ("candidate"):
+  				handleCandidate(msgJson);
+  				break;
+  			case("offer"):
+  				handleOffer(msgJson);
+  				break;
+  			case("answer"):
+  				handleAnswer(msgJson);
   				break;
   		}
   	}
@@ -184,6 +191,9 @@ function handleAcceptVideoCall(msgJson){
 	var fromUser=msgJson.fromUser;
 	var toUser=msgJson.toUser;
 	Locallog(fromUser+"接受了通话请求，正在连接");
+	createRTCPeerConnection(fromUser);
+	addLocalStream(fromUser);
+	doConnectionRound(fromUser);
 }
 function handleVideoCall(msgJson){
 	console.log("处理通话请求："+JSON.stringify(msgJson));
@@ -195,6 +205,34 @@ function handleVideoCall(msgJson){
 		rejectVideoCall(fromUser);
 	}
 }
+function handleCandidate(msgJson){
+	var fromUser=msgJson.fromUser;
+	var toUser=msgJson.toUser;
+	var pc=RTCPeerConnectionMap.get(fromUser);
+	var candidate = new RTCIceCandidate({
+		sdpMLineIndex : msgJson.message.label,
+		candidate : msgJson.message.candidate
+	});
+	Locallog("handleCandidate:接收并添加了candidate信息"+candidate);
+	pc.addIceCandidate(candidate);
+}
+function handleOffer(msgJson){
+	var fromUser=msgJson.fromUser;
+	var toUser=msgJson.toUser;
+	var pc=RTCPeerConnectionMap.get(fromUser);
+	var desc=msgJson.message;
+	Locallog("接收到"+fromUser+" 发送的desc"+JSON.stringify(msgJson.message));
+	pc.setRemoteDescription(new RTCSessionDescription(desc));
+	createAnswer(fromUser);
+}
+function handleAnswer(msgJson){
+	var fromUser=msgJson.fromUser;
+	var toUser=msgJson.toUser;
+	var pc=RTCPeerConnectionMap.get(fromUser);
+	var desc=msgJson.message;
+	Locallog("接收到"+fromUser+" 发送的desc"+JSON.stringify(msgJson.message));
+	pc.setRemoteDescription(new RTCSessionDescription(desc));
+}
 function acceptVideoCall(userName){
 	Locallog("接受"+userName+"通话邀请，发送接受信息，进入通话连接建立阶段");
 	sendAcceptVideoCallMsg(userName);
@@ -202,7 +240,55 @@ function acceptVideoCall(userName){
 	addLocalStream(userName);
 	doConnectionRound(userName);
 }
+function doConnectionRound(userName){
+	createOffer(userName);
+}
+function createOffer(userName){
+	var pc=RTCPeerConnectionMap.get(userName);
+	if(pc==null||!pc){
+		Locallog("没有对"+userName+"创建通信节点，后者通信节点保存失败");
+		return;
+	}
+	pc.createOffer(
+			function(desc){createOfferSuccess(desc,userName);},
+			function(error){createOfferError(error,userName);});
+}
+function createAnswer(userName){
+	var pc=RTCPeerConnectionMap.get(userName);
+	if(pc==null||!pc){
+		Locallog("没有对"+userName+"创建通信节点，后者通信节点保存失败");
+		return;
+	}
+	pc.createAnswer(
+			function(desc){createAnswerSuccess(desc,userName);},
+			function(error){createAnswerError(error,userName);});
+}
+function createOfferSuccess(desc,userName){
+	Locallog("创建offer成功，准备向"+userName+"发送offer信息 ");
+	var pc=RTCPeerConnectionMap.get(userName);
+	pc.setLocalDescription(desc);
+	Locallog("本地desc设置成功，向"+userName+"发送desc");
+	var offerCommand="offer";
+	var message=desc;
+	sendTexgMsg("me",userName,offerCommand,message);
+}
+function createOfferError(error,userName){
+	Locallog("创建offer失败： "+error);
+}
+function createAnswerSuccess(desc,userName){
+	Locallog("创建answer成功，准备向"+userName+"发送answer信息 ");
+	var pc=RTCPeerConnectionMap.get(userName);
+	pc.setLocalDescription(desc);
+	Locallog("本地desc设置成功，向"+userName+"发送desc");
+	var offerCommand="answer";
+	var message=desc;
+	sendTexgMsg("me",userName,offerCommand,message);
+}
+function createAnswerError(error,userName){
+	Locallog("创建answer失败： "+error);
+}
 function createRTCPeerConnection(userName){
+	openLocalVideoWindow();
 	var pc = new PeerConnection(stunServer);	
 	pc.onicecandidate = function(event){onIceCandidate(event,userName);};
 	pc.onconnecting = onSessionConnecting;
@@ -213,6 +299,7 @@ function createRTCPeerConnection(userName){
 	//添加到通讯映射里。这里应该放到服务器更安全。但是我实在想不出来可以把js变量放到服务器的方法。
 	//为了安全可以在服务器中也建立一个映射，并生成一个时间码。如果不能匹配则拒绝信息的交换。防止
 	//通话信息泄露
+	Locallog("创建了本地与"+userName+"连接的RTCPeerConnector:"+pc);
 	RTCPeerConnectionMap.set(userName,pc);
 }
 function addLocalStream(userName){
@@ -268,7 +355,7 @@ function lanchVideoCall(userName){
 	
 	Locallog("呼叫用户："+userName);
 	//在通话请求被接收之前，每1s执行一次状态函数，表示正在进行通话
-	lanchVideoCallid=setTimeout("lanchVideoCallState("+userName+")",1000);
+	//lanchVideoCallid=setTimeout("lanchVideoCallState("+userName+")",1000);
 	var message="nothing";
 	var lanchVideoCallcommand="lanchVideoCall";
 	//发送文字命令，消息类型为lanchVideoCall
@@ -320,6 +407,7 @@ function openLocalStreamError(err){
 	Locallog("创建本地stream失败，"+err);
 }
 function createPeerConnection(toUserName) {
+	openLocalVideoWindow();
 	var server = {"iceServers" : [{"url" : "stun:stun.l.google.com:19302"}]};
 	
 	var pc = new PeerConnection(server);
@@ -328,28 +416,30 @@ function createPeerConnection(toUserName) {
 	pc.onconnecting = onSessionConnecting;
 	pc.onopen = onSessionOpened;
 	//pc.onaddstream = onRemoteStreamAdded;,修改为新的加载方式
-	pc.ontrack=onRemoteStreamAdded;
+	pc.ontrack=function(event){onRemoteStreamAdded(event,toUserName)};
 	pc.onremovestream = onRemoteStreamRemoved;
 	
 	return pc;
 }
 function onIceCandidate(event,toUserName){
-	if(event.candidate){
+	if(event.candidate.candidate!=null){
 		var message={
 				"label":event.candidate.sdpMLineIndex,
 				"id":event.candidate.sdpMid,
 				"candidate":event.candidate.candidate             
 		};
 		sendTexgMsg("me",toUserName,"candidate",message);
+	}else{
+		Locallog("End of candidate");
 	}
 }
-function onSessionConnection(){
+function onSessionConnecting(){
 	
 }
 function onSessionOpened(){
 	
 }
-function onRemoteStreamAdded(){
+function onRemoteStreamAdded(event,userName){
 	$('#videoTalkWindows').append(
 			"<div class='videoTalk' id='"+userName+"'>" +
 				"<div class='topic' id='"+userName+"'>"+
@@ -361,6 +451,8 @@ function onRemoteStreamAdded(){
 				"<div class='videoArea'>"+
 					"<video class='videoTalk' connect='"+userName+"'></video>"+
 				"</div>");
+	var stream=event.streams[0];
+	$('div.videoTalk#me div.videoArea video')[0].srcObject=stream;
 }
 function onRemoteStreamRemoved(){
 	
@@ -395,6 +487,7 @@ function openTextMsgWindow(userName){
 		sendTextTo(userName);
 	});
 }
+var mydata;
 function sendTextTo(userName){
 	var textNow=$("#textSendWindows .textSendWindow#"+userName +" .textAreaNow").val();
 	var textHis=$("#textSendWindows .textSendWindow#"+userName +" .textAreaHis").val();
@@ -414,25 +507,13 @@ function sendTextTo(userName){
 		}
 
 	};
+	alert(data);
 	$.post("HandleRequest",data,sendTextMsgSuccess);
 }
 function sendTextMsgSuccess(result){
 	
 }
-function sendTexgMsg(fromUserName,toUserName,type,message){
-	var data={
-			"type":"TextMsg",
-			"data":{
-				"type":type,
-				"fromUser":fromUserName,
-				"toUser":toUserName,
-				"time":getTime(),
-				"message":message
-			}
-	};
-	Locallog("function sendTextMsg 发送文字信息到服务器： "+JSON.stringify(data));
-	$.post("HandleRequest",data,sendTextMsgSuccess);
-}
+
 
 
 

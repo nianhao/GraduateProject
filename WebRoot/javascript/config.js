@@ -7,4 +7,5 @@ var videoContains={
 		video:true
 		
 };
-var stunServer = {"iceServers" : [{"url" : "stun:stun.l.google.com:19302"}]};
+var PeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
+var stunServer = {"iceServers" : [{"urls" : "stun:stun.l.google.com:19302"}]};

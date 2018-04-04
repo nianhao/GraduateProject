@@ -128,6 +128,8 @@ public class WebSocktServer {
 		// TODO Auto-generated method stub
 		String type=textMsg.getType();
 		switch (type) {
+			case "offer":
+			case "answer":
 			case "acceptVideoCall":
 			case "rejectVideoCall":
 			case "lanchVideoCall":
@@ -135,6 +137,7 @@ public class WebSocktServer {
 			case "text":
 				TextMsg sendTextMsg=new TextMsg(textMsg,textMsg.getMessage());
 				try{
+					CommonFunc.PWLog("向"+toUserWebSocktSession.getAsyncRemote().toString()+"发送信息"+sendTextMsg.toString());
 					toUserWebSocktSession.getAsyncRemote().sendText(sendTextMsg.toString());
 				}catch (Exception e) {
 					// TODO: handle exception

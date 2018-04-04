@@ -30,13 +30,27 @@ public class TextMsg {
 		setToUserBrowserId(textMsg.getToUserBrowserId());
 	}
 	public String toString(){
-		return "{"
+		if(this.type=="candidate"||this.type.equals("candidate")
+				||this.type=="offer"||this.type.equals("offer")
+				||this.type=="answer"||this.type.equals("answer")){
+			return "{"
+					
+				+" \"type\":"+"\""+this.type+"\""+","
+				+"\"fromUser\":"+"\""+this.fromUser+"\""+","
+				+"\"toUser\":"+"\""+this.toUser+"\""+","
+				+"\"sendTime\":"+"\""+this.sendTime+"\""+","
+				+"\"message\":"+this.message
+				+ "}";			
+		}else{
+			return "{"
+		
 				+" \"type\":"+"\""+this.type+"\""+","
 				+"\"fromUser\":"+"\""+this.fromUser+"\""+","
 				+"\"toUser\":"+"\""+this.toUser+"\""+","
 				+"\"sendTime\":"+"\""+this.sendTime+"\""+","
 				+"\"message\":"+"\""+this.message+"\""
 				+ "}";
+		}
 	}
 	public String getType() {
 		return type;

@@ -13,6 +13,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionContext;
+import javax.xml.crypto.Data;
 
 import com.graduation.common.CommonFunc;
 import com.graduation.javaBean.TextMsg;
@@ -69,8 +70,23 @@ public class HandleRequest extends HttpServlet {
 		String fromUser=request.getParameter("data[fromUser]");
 		String toUser=request.getParameter("data[toUser]");
 		String sendTime=request.getParameter("data[time]");
-		String message=request.getParameter("data[message]");
-		
+		String message="";
+		if(type=="candidate"||type.equals("candidate")){
+			CommonFunc.PWLog("接收到candidate信息，重新解析");
+			String label=null;
+			String id=null;
+			String candidateString=null;
+			
+			message+="{"+
+					"\"label\":"+"\""+request.getParameter("data[message][label]")+"\""+","+
+					"\"id\":"+"\""+request.getParameter("data[message][id]")+"\""+","+
+					"\"candidate\":"+"\""+request.getParameter("data[message][candidate]")+"\""+
+					"}";
+					
+		}else{
+
+			message=request.getParameter("data[message]");
+		}
 		String fromUserBrowserId=null;
 		String toUserBrowserId=null;
 		
