@@ -152,7 +152,7 @@ function handleMessage(Msg){
   		}
   		
   		var type=msgJson.type;
-  		console.log(type,typeof(type));
+  		//console.log(type,typeof(type));
   		var msgInfo=msgJson.message;
   		switch(type){
   			case ("refresh"):
@@ -193,7 +193,7 @@ function handleAcceptVideoCall(msgJson){
 	Locallog(fromUser+"接受了通话请求，正在连接");
 	createRTCPeerConnection(fromUser);
 	addLocalStream(fromUser);
-	doConnectionRound(fromUser);
+	
 }
 function handleVideoCall(msgJson){
 	console.log("处理通话请求："+JSON.stringify(msgJson));
@@ -221,7 +221,7 @@ function handleOffer(msgJson){
 	var toUser=msgJson.toUser;
 	var pc=RTCPeerConnectionMap.get(fromUser);
 	var desc=msgJson.message;
-	Locallog("接收到"+fromUser+" 发送的desc"+JSON.stringify(msgJson.message));
+	Locallog("接收到"+fromUser+msgJson.type);
 	pc.setRemoteDescription(new RTCSessionDescription(desc));
 	createAnswer(fromUser);
 }
@@ -230,15 +230,15 @@ function handleAnswer(msgJson){
 	var toUser=msgJson.toUser;
 	var pc=RTCPeerConnectionMap.get(fromUser);
 	var desc=msgJson.message;
-	Locallog("接收到"+fromUser+" 发送的desc"+JSON.stringify(msgJson.message));
+	Locallog("接收到"+fromUser+msgJson.type);
 	pc.setRemoteDescription(new RTCSessionDescription(desc));
 }
 function acceptVideoCall(userName){
 	Locallog("接受"+userName+"通话邀请，发送接受信息，进入通话连接建立阶段");
-	sendAcceptVideoCallMsg(userName);
 	createRTCPeerConnection(userName);
-	addLocalStream(userName);
-	doConnectionRound(userName);
+	openLocalVideoWindow();
+	sendAcceptVideoCallMsg(userName);
+
 }
 function doConnectionRound(userName){
 	createOffer(userName);
@@ -267,34 +267,34 @@ function createOfferSuccess(desc,userName){
 	Locallog("创建offer成功，准备向"+userName+"发送offer信息 ");
 	var pc=RTCPeerConnectionMap.get(userName);
 	pc.setLocalDescription(desc);
-	Locallog("本地desc设置成功，向"+userName+"发送desc");
+	Locallog("本地desc设置成功，向"+userName+"发送offer");
 	var offerCommand="offer";
 	var message=desc;
 	sendTexgMsg("me",userName,offerCommand,message);
 }
 function createOfferError(error,userName){
-	Locallog("创建offer失败： "+error);
+	Locallog("创建offer失败： "+error.toString());
 }
 function createAnswerSuccess(desc,userName){
 	Locallog("创建answer成功，准备向"+userName+"发送answer信息 ");
 	var pc=RTCPeerConnectionMap.get(userName);
 	pc.setLocalDescription(desc);
-	Locallog("本地desc设置成功，向"+userName+"发送desc");
+	Locallog("本地desc设置成功，向"+userName+"发送answer");
 	var offerCommand="answer";
 	var message=desc;
 	sendTexgMsg("me",userName,offerCommand,message);
 }
 function createAnswerError(error,userName){
-	Locallog("创建answer失败： "+error);
+	Locallog("创建answer失败： "+error.toString());
 }
 function createRTCPeerConnection(userName){
-	openLocalVideoWindow();
+	if(RTCPeerConnectionMap.has(userName)) return;
 	var pc = new PeerConnection(stunServer);	
 	pc.onicecandidate = function(event){onIceCandidate(event,userName);};
 	pc.onconnecting = onSessionConnecting;
 	pc.onopen = onSessionOpened;
 	//pc.onaddstream = onRemoteStreamAdded;,修改为新的加载方式
-	pc.ontrack=onRemoteStreamAdded;
+	pc.ontrack=function(event){onRemoteStreamAdded(event,userName);};
 	pc.onremovestream = onRemoteStreamRemoved;
 	//添加到通讯映射里。这里应该放到服务器更安全。但是我实在想不出来可以把js变量放到服务器的方法。
 	//为了安全可以在服务器中也建立一个映射，并生成一个时间码。如果不能匹配则拒绝信息的交换。防止
@@ -303,6 +303,7 @@ function createRTCPeerConnection(userName){
 	RTCPeerConnectionMap.set(userName,pc);
 }
 function addLocalStream(userName){
+	Locallog("将本地视频流绑定到与"+userName+"连接的RTCPeerConnection中");
 	var pc=RTCPeerConnectionMap.get(userName);
 	window.localStream.getTracks().forEach(
 			function(track){
@@ -312,6 +313,7 @@ function addLocalStream(userName){
 				);
 			}
 		);
+	doConnectionRound(userName);
 }
 function rejectVideoCall(fromUser){
 	Locallog("拒绝"+fromUser+"通话邀请，发送拒绝信息。");
@@ -392,19 +394,17 @@ function openLocalVideo(){
 					"<video class='video' connect='me' autoplay></video>"+
 				"</div>"+
 			"</div>");
-	navigator.mediaDevices.getUserMedia(videoContains).then(setLocalStream).catch(openLocalStreamError);
-}
-function start(){
+	Locallog("尝试开始本地视频流");
 	navigator.mediaDevices.getUserMedia(videoContains).then(setLocalStream).catch(openLocalStreamError);
 }
 function setLocalStream(stream){
-	Locallog("创建本地stream成功，"+stream);
+	Locallog("创建本地stream成功，"+stream+"并绑定到window.localStream");
 	window.localStream=stream;
 	localVideoOpen+=1;
 	$('div.videoTalk#me div.videoArea video')[0].srcObject=stream;
 }
 function openLocalStreamError(err){
-	Locallog("创建本地stream失败，"+err);
+	Locallog("创建本地stream失败，"+err.toString());
 }
 function createPeerConnection(toUserName) {
 	openLocalVideoWindow();
@@ -422,7 +422,7 @@ function createPeerConnection(toUserName) {
 	return pc;
 }
 function onIceCandidate(event,toUserName){
-	if(event.candidate.candidate!=null){
+	if(event.candidate){
 		var message={
 				"label":event.candidate.sdpMLineIndex,
 				"id":event.candidate.sdpMid,
@@ -434,12 +434,13 @@ function onIceCandidate(event,toUserName){
 	}
 }
 function onSessionConnecting(){
-	
+	Locallog("正在连接");
 }
 function onSessionOpened(){
-	
+	Locallog("新建节点");
 }
 function onRemoteStreamAdded(event,userName){
+	Locallog("接收到远程的视频流，新建video元素，添加stream,来自"+userName);
 	$('#videoTalkWindows').append(
 			"<div class='videoTalk' id='"+userName+"'>" +
 				"<div class='topic' id='"+userName+"'>"+
@@ -449,10 +450,25 @@ function onRemoteStreamAdded(event,userName){
 					"</ul>"+
 				"</div>"+
 				"<div class='videoArea'>"+
-					"<video class='videoTalk' connect='"+userName+"'></video>"+
+					"<video class='videoTalk' autoplay connect='"+userName+"'></video>"+
 				"</div>");
 	var stream=event.streams[0];
-	$('div.videoTalk#me div.videoArea video')[0].srcObject=stream;
+	$('div.videoTalk#'+userName+' div.videoArea video')[0].srcObject=stream;
+	Locallog('准备发送本机视频到'+userName);
+	var delay=function(userName){
+		if(window.localStream){
+			callback(function(){addLocalStream(userName);})
+			
+			//doConnectionRound(userName);
+			return;
+		}else{
+			setTimeout(function(){delay(userName)},500);
+		}
+	}
+	
+	
+	//createRTCPeerConnection(userName);
+	
 }
 function onRemoteStreamRemoved(){
 	

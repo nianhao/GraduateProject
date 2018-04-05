@@ -71,7 +71,7 @@ public class HandleRequest extends HttpServlet {
 		String toUser=request.getParameter("data[toUser]");
 		String sendTime=request.getParameter("data[time]");
 		String message="";
-		if(type=="candidate"||type.equals("candidate")){
+		/*if(type=="candidate"||type.equals("candidate")){
 			CommonFunc.PWLog("接收到candidate信息，重新解析");
 			String label=null;
 			String id=null;
@@ -83,10 +83,10 @@ public class HandleRequest extends HttpServlet {
 					"\"candidate\":"+"\""+request.getParameter("data[message][candidate]")+"\""+
 					"}";
 					
-		}else{
+		}else{*/
 
-			message=request.getParameter("data[message]");
-		}
+		message=request.getParameter("data[message]");
+		//}
 		String fromUserBrowserId=null;
 		String toUserBrowserId=null;
 		
