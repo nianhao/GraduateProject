@@ -3,6 +3,9 @@ var submitUserNameBtn=document.querySelector('#submit');
 var webSocketOpen=false;
 var localVideoOpen=0;
 var RTCPeerConnectionMap=new Map();
+window.localStream=null;
+window.needStreamUserName="noOne";
+window.waitVideoReady="noOne";
 function getUserName(){
   		var userName=$('#userName').val();
   		if(userName==='' || userName===null){
@@ -65,7 +68,7 @@ function onChannelOpened(){
 	Locallog('open websockt');
 	window.channelOpenTime=new Date();
 	//读取在线用户
-	refreshOnlineUser(); 
+	handleRefresh();
 }
 function onChannelMessage(message){
 	Locallog("收到信息： "+message.data);
@@ -84,19 +87,6 @@ function onChannelClosed(){
 	window.channelCloseTime=new Date();
 }
 
-/*
-	读取在线用户，弹出一个用户列表，显示用户名。
-	
-*/
-function refreshOnlineUser(){
-	var data={"type":"getOnlineUser"};
-	$.post("HandleRequest",data,refreshOnlineUserSuccess);
-}
-function refreshOnlineUserSuccess(result){
-	//{"userName" :["ss",""]}
-	Locallog(result);
-	showOnlineUser(result.toString());
-}
 function showOnlineUser(result){
 	//删除全部子元素
 	$('#userOnline').empty();
@@ -137,74 +127,9 @@ function showOnlineUser(result){
 		startVideoCall(userName);
 	});
 }
-/*
- * @Msg 通过websocket发送的信息。在Msg.data中有在websocketserver中构造的文字信息。
- */
-function handleMessage(Msg){
-  		var msgStr=Msg.data;
-  		var msgJson;
-  		if(typeof(msgStr)=="object"){
-  			Locallog("handleMessage 接收到Json数据"+msgStr.toString());
-  			msgJson=msgStr;
-  		}else{
-  			Locallog("handleMessage 接收到string 数据"+msgStr);
-  			msgJson=$.parseJSON(msgStr);
-  		}
-  		
-  		var type=msgJson.type;
-  		//console.log(type,typeof(type));
-  		var msgInfo=msgJson.message;
-  		switch(type){
-  			case ("refresh"):
-  				Locallog("有新的用户上线了");
-  				refreshOnlineUser();
-  				break;
-  			case("text"):
-  				Locallog("接收到消息"+msgInfo);
-  				var fromUser=msgJson.fromUser;
-  				openTextMsgWindow(msgJson.fromUser);
-  				var textHis=$("#textSendWindows .textSendWindow#"+msgJson.fromUser +" .textAreaHis").val();
-  				textHis=textHis+'\n'+msgJson.fromUser+getTime()+'\n'+msgInfo;
-  				$("#textSendWindows .textSendWindow#"+msgJson.fromUser +" .textAreaHis").val(textHis);
-  				break;
-  			case("lanchVideoCall"):
-  				handleVideoCall(msgJson);
-  				break;
-  			case("acceptVideoCall"):
-  				handleAcceptVideoCall(msgJson);
-  				break;
-  			case("rejectVideoCall"):
-  				handleRejectVideoCall(msgJson);
-  				break;
-  			case ("candidate"):
-  				handleCandidate(msgJson);
-  				break;
-  			case("offer"):
-  				handleOffer(msgJson);
-  				break;
-  			case("answer"):
-  				handleAnswer(msgJson);
-  				break;
-  		}
-  	}
-function handleAcceptVideoCall(msgJson){
-	var fromUser=msgJson.fromUser;
-	var toUser=msgJson.toUser;
-	Locallog(fromUser+"接受了通话请求，正在连接");
-	createRTCPeerConnection(fromUser);
-	addLocalStream(fromUser);
-	
-}
-function handleVideoCall(msgJson){
-	console.log("处理通话请求："+JSON.stringify(msgJson));
-	var fromUser=msgJson.fromUser;
-	var toUser=msgJson.toUser;
-	if(window.confirm("是否接收来自"+fromUser+"的通话请求")){
-		acceptVideoCall(fromUser);
-	}else{
-		rejectVideoCall(fromUser);
-	}
-}
+
+
+
 function handleCandidate(msgJson){
 	var fromUser=msgJson.fromUser;
 	var toUser=msgJson.toUser;
@@ -233,16 +158,7 @@ function handleAnswer(msgJson){
 	Locallog("接收到"+fromUser+msgJson.type);
 	pc.setRemoteDescription(new RTCSessionDescription(desc));
 }
-function acceptVideoCall(userName){
-	Locallog("接受"+userName+"通话邀请，发送接受信息，进入通话连接建立阶段");
-	createRTCPeerConnection(userName);
-	openLocalVideoWindow();
-	sendAcceptVideoCallMsg(userName);
 
-}
-function doConnectionRound(userName){
-	createOffer(userName);
-}
 function createOffer(userName){
 	var pc=RTCPeerConnectionMap.get(userName);
 	if(pc==null||!pc){
@@ -287,48 +203,11 @@ function createAnswerSuccess(desc,userName){
 function createAnswerError(error,userName){
 	Locallog("创建answer失败： "+error.toString());
 }
-function createRTCPeerConnection(userName){
-	if(RTCPeerConnectionMap.has(userName)) return;
-	var pc = new PeerConnection(stunServer);	
-	pc.onicecandidate = function(event){onIceCandidate(event,userName);};
-	pc.onconnecting = onSessionConnecting;
-	pc.onopen = onSessionOpened;
-	//pc.onaddstream = onRemoteStreamAdded;,修改为新的加载方式
-	pc.ontrack=function(event){onRemoteStreamAdded(event,userName);};
-	pc.onremovestream = onRemoteStreamRemoved;
-	//添加到通讯映射里。这里应该放到服务器更安全。但是我实在想不出来可以把js变量放到服务器的方法。
-	//为了安全可以在服务器中也建立一个映射，并生成一个时间码。如果不能匹配则拒绝信息的交换。防止
-	//通话信息泄露
-	Locallog("创建了本地与"+userName+"连接的RTCPeerConnector:"+pc);
-	RTCPeerConnectionMap.set(userName,pc);
-}
-function addLocalStream(userName){
-	Locallog("将本地视频流绑定到与"+userName+"连接的RTCPeerConnection中");
-	var pc=RTCPeerConnectionMap.get(userName);
-	window.localStream.getTracks().forEach(
-			function(track){
-				pc.addTrack(
-					track,
-					localStream
-				);
-			}
-		);
-	doConnectionRound(userName);
-}
-function rejectVideoCall(fromUser){
-	Locallog("拒绝"+fromUser+"通话邀请，发送拒绝信息。");
-	sendRejectVideoCallMsg(fromUser);	
-}
-function sendAcceptVideoCallMsg(userName){
-	var message="nothing";
-	var acceptVideoCallCommand="acceptVideoCall";
-	sendTexgMsg("me",userName,acceptVideoCallCommand,message);
-}
-function sendRejectVideoCallMsg(userName){
-	var message="nothing";
-	var rejectVideoCallCommand="rejectVideoCall";
-	sendTexgMsg("me",userName,rejectVideoCallCommand,message);
-}
+
+
+
+
+
 var lanchVideoCallid;
 function startSendText(userName){
 	openTextMsgWindow(userName);
@@ -367,45 +246,13 @@ function lanchVideoCall(userName){
 function lanchVideoCallState(userName){
 	Locallog("呼叫"+userName);
 }
-/*如果localVideoOpen=false,说明本地视频没有打开。则打开本地视频流，设置全局变量window.localstream
- *否则什么都不敢，进入呼叫过程
- * @userName 建立与userName的通话窗口
- */
-function openLocalVideoWindow(){	
-	if(localVideoOpen==0){
-		openLocalVideo();
-	}
-}
+
 function addVideoSender(userName){
 	
 	var pc=createPeerConnection();
 	RTCPeerConnection.set(userName,pc);
 }
-function openLocalVideo(){
-	$('#videoTalkWindows').append(
-			"<div class='videoTalk' id='me'>" +
-				"<div class='topic' id='me'>"+
-					"<ul id='me'>"+
-						"<li id='me'>本机视频</li>"+
-						"<li class='videoHang'><button class='videoHangBtn'>关闭</button></li>"+
-					"</ul>"+
-				"</div>"+
-				"<div class='videoArea'>"+
-					"<video class='video' connect='me' autoplay></video>"+
-				"</div>"+
-			"</div>");
-	Locallog("尝试开始本地视频流");
-	navigator.mediaDevices.getUserMedia(videoContains).then(setLocalStream).catch(openLocalStreamError);
-}
-function setLocalStream(stream){
-	Locallog("创建本地stream成功，"+stream+"并绑定到window.localStream");
-	window.localStream=stream;
-	localVideoOpen+=1;
-	$('div.videoTalk#me div.videoArea video')[0].srcObject=stream;
-}
-function openLocalStreamError(err){
-	Locallog("创建本地stream失败，"+err.toString());
-}
+
 function createPeerConnection(toUserName) {
 	openLocalVideoWindow();
 	var server = {"iceServers" : [{"url" : "stun:stun.l.google.com:19302"}]};
@@ -529,26 +376,3 @@ function sendTextTo(userName){
 function sendTextMsgSuccess(result){
 	
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

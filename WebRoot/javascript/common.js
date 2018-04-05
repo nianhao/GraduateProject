@@ -58,3 +58,25 @@ function sendTexgMsg(fromUserName,toUserName,type,message){
 	Locallog("function sendTextMsg 发送文字信息到服务器： "+JSON.stringify(data));
 	$.post("HandleRequest",data,sendTextMsgSuccess);
 }
+/*将result格式化为json格式
+ * @result 传入的需要被格式化的内容，可以是string也可以是JSON对象
+ * @return 返回JSON格式的对象或者是null
+ */
+function jsonFormat(result){
+	var resJson=null;
+	try{
+		if (typeof (result) == "object") {
+			//Locallog("接收到Json数据" + resJson.toString());
+			resJson = result;
+
+		} else {
+			//Locallog("接收到字符串数据" + result);
+			resJson = $.parseJSON(result);
+
+		}
+	}catch(err){
+		Locallog("jsonFormat在将"+reult+"格式化为json格式的过程出错"+err.toString());
+	}
+	
+	return resJson;
+}

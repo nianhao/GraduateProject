@@ -127,14 +127,15 @@ public class WebSocktServer {
 	private static void handlTextMsg(TextMsg textMsg,Session toUserWebSocktSession) {
 		// TODO Auto-generated method stub
 		String type=textMsg.getType();
-		switch (type) {
+		/*switch (type) {
+			case "videoReady":
 			case "offer":
 			case "answer":
 			case "acceptVideoCall":
 			case "rejectVideoCall":
 			case "lanchVideoCall":
 			case "candidate":
-			case "text":
+			case "text":*/
 				TextMsg sendTextMsg=new TextMsg(textMsg,textMsg.getMessage());
 				try{
 					CommonFunc.PWLog("向"+toUserWebSocktSession.getAsyncRemote().toString()+"发送信息"+sendTextMsg.toString());
@@ -144,11 +145,11 @@ public class WebSocktServer {
 					CommonFunc.PWLog(e.getMessage());
 				}
 			
-			break;
+			/*break;
 
 		default:
 			break;
-		}
+		}*/
 		
 		
 	}

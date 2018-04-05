@@ -19,8 +19,12 @@
 	<link rel="stylesheet" href="./css/main.css" type="text/css" />
 	<script type="text/javascript" src="./javascript/jquery-3.3.1-min.js"></script>
 	<script type="text/javascript" src="./javascript/common.js"></script>
-	<script type="text/javascript" src="./javascript/config.js"></script>  
-	</head>
+	<script type="text/javascript" src="./javascript/config.js"></script>
+	<script type="text/javascript" src="./javascript/commandHandler.js"></script>
+	<script type="text/javascript" src="./javascript/handlerImp.js"></script>
+	<script type="text/javascript" src="./javascript/Callback.js"></script>
+	<script type="text/javascript" src="./javascript/doEvent.js"></script>
+</head>
   
 <body>
     正在生成id,请输入昵称： <br>
